@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>com.github.obatiuk.maven-examples</groupId>
+	<artifactId>maven-examples-scss-min-js-war</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<packaging>war</packaging>
+
+	<properties>
+		<java.source.version>1.7</java.source.version>
+		<java.target.verstion>1.7</java.target.verstion>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+		<!-- Source folders for the dynamic content -->
+		<css.source.directory>${basedir}/src/main/scss</css.source.directory>
+		<jsp.source.directory>${basedir}/src/main/jsp</jsp.source.directory>
+		<js.source.directory>${basedir}/src/main/js</js.source.directory>
+
+		<!-- Target folders for generated resources -->
+		<css.generated.directory>${project.build.directory}/generated-resources/css</css.generated.directory>
+		<jsp.generated.directory>${project.build.directory}/generated-resources/jsp</jsp.generated.directory>
+		<js.generated.directory>${project.build.directory}/generated-resources/js</js.generated.directory>
+
+		<!-- Result folders. The trick is to change following properties for "production" 
+			profile to pick up "minified" content (see "production" profile). -->
+		<css.result.directory>${css.generated.directory}</css.result.directory>
+		<jsp.result.directory>${jsp.generated.directory}</jsp.result.directory>
+		<js.result.directory>${js.generated.directory}</js.result.directory>
+	</properties>
+
+	<dependencies>
+
+		<!-- Basic dependencies for web-app development -->
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>servlet-api</artifactId>
+			<version>2.5</version>
+			<scope>provided</scope>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+
+		<outputDirectory>${project.build.directory}/${project.build.finalName}/WEB-INF/classes</outputDirectory>
+
+		<plugins>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.1</version>
+				<configuration>
+					<source>${java.source.version}</source>
+					<target>${java.target.verstion}</target>
+				</configuration>
+			</plugin>
+
+			<!-- Following two executions will copy "js" and "jsp" resources to a 
+				"generated" folder. Both executions are mapped to "generate-resources" phase. 
+				Note that we are not copying css resources manually, because they will be 
+				taken care of by the "sass-maven-plugin". -->
+			<plugin>
+				<artifactId>maven-resources-plugin</artifactId>
+				<version>2.7</version>
+				<executions>
+					<execution>
+						<id>copy-js</id>
+						<phase>generate-resources</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${js.generated.directory}</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${js.source.directory}</directory>
+									<!-- We can filter JavaScript resources here if we'd like to. -->
+									<filtering>false</filtering>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+					<execution>
+						<id>copy-jsp</id>
+						<phase>generate-resources</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${jsp.generated.directory}</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${jsp.source.directory}</directory>
+									<!-- We can filter JSP resources here if we'd like to. -->
+									<filtering>false</filtering>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- SCSS processor configuration. Result css files will always be copied 
+				to the "generated" folder during "generated-resource" phase. -->
+			<plugin>
+				<groupId>nl.geodienstencentrum.maven</groupId>
+				<artifactId>sass-maven-plugin</artifactId>
+				<version>2.14</version>
+				<executions>
+					<execution>
+						<id>default-cli</id>
+						<goals>
+							<goal>update-stylesheets</goal>
+						</goals>
+						<phase>generate-resources</phase>
+						<configuration>
+							<sassSourceDirectory>${css.source.directory}</sassSourceDirectory>
+							<destination>${css.generated.directory}</destination>
+							<sassOptions>
+								<unix_newlines>true</unix_newlines>
+								<cache>true</cache>
+								<always_update>true</always_update>
+								<cache_location>'${project.build.directory}/sass_cache'</cache_location>
+								<style>:expanded</style>
+								<sourcemap>:none</sourcemap>
+							</sassOptions>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Merging static resource from default "src/main/webapp" location with 
+				generated (in case of "production" profile - minified) resources under the 
+				root folder. -->
+			<plugin>
+				<artifactId>maven-war-plugin</artifactId>
+				<version>2.3</version>
+				<configuration>
+					<archive>
+						<addMavenDescriptor>false</addMavenDescriptor>
+					</archive>
+					<archiveClasses>false</archiveClasses>
+					<webResources>
+						<resource>
+							<directory>${css.result.directory}</directory>
+							<targetPath>/</targetPath>
+						</resource>
+						<resource>
+							<directory>${jsp.result.directory}</directory>
+							<targetPath>/</targetPath>
+						</resource>
+						<resouce>
+							<directory>${js.result.directory}</directory>
+							<targetPath>/</targetPath>
+						</resouce>
+					</webResources>
+				</configuration>
+			</plugin>
+
+			<!-- By default Jetty includes only static web-app resources folder - 
+				"src/main/webapp". Including generate (in case of "production" profile - 
+				minified) resources manually. -->
+			<plugin>
+				<groupId>org.eclipse.jetty</groupId>
+				<artifactId>jetty-maven-plugin</artifactId>
+				<version>9.3.7.v20160115</version>
+				<configuration>
+					<scanIntervalSeconds>10</scanIntervalSeconds>
+					<webAppConfig>
+						<resourceBases>
+							<resourceBase>${project.basedir}/src/main/webapp</resourceBase>
+							<resourceBase>${css.result.directory}</resourceBase>
+							<resourceBase>${jsp.result.directory}</resourceBase>
+							<resourceBase>${js.result.directory}</resourceBase>
+						</resourceBases>
+					</webAppConfig>
+				</configuration>
+			</plugin>
+
+		</plugins>
+
+		<!-- Following section is for Eclipse users. This configuration enables 
+			"sass-maven-plugin" during incremental builds. -->
+		<pluginManagement>
+			<plugins>
+				<!--This plugin's configuration is used to store Eclipse m2e settings 
+					only. It has no influence on the Maven build itself. -->
+				<plugin>
+					<groupId>org.eclipse.m2e</groupId>
+					<artifactId>lifecycle-mapping</artifactId>
+					<version>1.0.0</version>
+					<configuration>
+						<lifecycleMappingMetadata>
+							<pluginExecutions>
+								<pluginExecution>
+									<pluginExecutionFilter>
+										<groupId>
+											nl.geodienstencentrum.maven
+										</groupId>
+										<artifactId>
+											sass-maven-plugin
+										</artifactId>
+										<versionRange>
+											[2.14,)
+										</versionRange>
+										<goals>
+											<goal>
+												update-stylesheets
+											</goal>
+										</goals>
+									</pluginExecutionFilter>
+									<action>
+										<execute>
+											<runOnIncremental>true</runOnIncremental>
+										</execute>
+									</action>
+								</pluginExecution>
+								<pluginExecution>
+									<pluginExecutionFilter>
+										<groupId>
+											com.google.code.maven-replacer-plugin
+										</groupId>
+										<artifactId>
+											replacer
+										</artifactId>
+										<versionRange>
+											[1.5.2,)
+										</versionRange>
+										<goals>
+											<goal>replace</goal>
+										</goals>
+									</pluginExecutionFilter>
+									<action>
+										<ignore />
+									</action>
+								</pluginExecution>
+							</pluginExecutions>
+						</lifecycleMappingMetadata>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+
+	</build>
+
+	<profiles>
+		<profile>
+			<id>production</id>
+			<activation>
+				<activeByDefault>false</activeByDefault>
+			</activation>
+			<properties>
+				<css.minified.directory>${project.build.directory}/minified-resources/css</css.minified.directory>
+				<js.minified.directory>${project.build.directory}/minified-resources/js</js.minified.directory>
+
+				<css.result.directory>${css.minified.directory}</css.result.directory>
+				<js.result.directory>${js.minified.directory}</js.result.directory>
+			</properties>
+
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>com.google.code.maven-replacer-plugin</groupId>
+						<artifactId>replacer</artifactId>
+						<version>1.5.2</version>
+						<executions>
+							<execution>
+								<phase>generate-resources</phase>
+								<goals>
+									<goal>replace</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<basedir>${jsp.generated.directory}</basedir>
+							<includes>
+								<include>**/*.jsp</include>
+							</includes>
+							<regexFlags>
+								<regexFlag>MULTILINE</regexFlag>
+							</regexFlags>
+							<unescape>true</unescape>
+							<replacements>
+								<!-- Remove all new line characters (Windows and Unix) -->
+								<replacement>
+									<token>\r\n|\n</token>
+									<value />
+								</replacement>
+								<replacement>
+									<!-- Removes spaces, tabs and line breaks after " or ' -->
+									<token>("|')(\s{2,})(.)</token>
+									<value>$1 $3</value>
+								</replacement>
+								<replacement>
+									<!-- Removes spaces, tabs and line breaks after '>' -->
+									<token>(&gt;)(\s\s+)</token>
+									<value>&gt;&#32;</value>
+								</replacement>
+								<replacement>
+									<!-- Removes spaces, tabs and line breaks before '<' -->
+									<token>(\s\s+)(&lt;)</token>
+									<value>&#32;&lt;</value>
+								</replacement>
+							</replacements>
+						</configuration>
+					</plugin>
+
+					<plugin>
+						<groupId>com.samaxes.maven</groupId>
+						<artifactId>minify-maven-plugin</artifactId>
+						<version>1.7.3</version>
+						<configuration>
+							<!-- Suffix is already added for convenience -->
+							<nosuffix>true</nosuffix>
+							<!-- Do not merge files -->
+							<skipMerge>true</skipMerge>
+						</configuration>
+						<executions>
+							<execution>
+								<id>minify-js</id>
+								<goals>
+									<goal>minify</goal>
+								</goals>
+								<configuration>
+									<webappSourceDir>${js.generated.directory}</webappSourceDir>
+									<webappTargetDir>${js.minified.directory}</webappTargetDir>
+									<jsSourceDir>/</jsSourceDir>
+									<jsSourceIncludes>
+										<jsSourceInclude>*.min.js</jsSourceInclude>
+									</jsSourceIncludes>
+									<jsEngine>CLOSURE</jsEngine>
+								</configuration>
+							</execution>
+							<execution>
+								<id>minify-css</id>
+								<goals>
+									<goal>minify</goal>
+								</goals>
+								<configuration>
+									<webappSourceDir>${css.generated.directory}</webappSourceDir>
+									<webappTargetDir>${css.minified.directory}</webappTargetDir>
+									<cssSourceDir>/</cssSourceDir>
+									<cssSourceIncludes>
+										<cssSourceInclude>*.css</cssSourceInclude>
+									</cssSourceIncludes>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
+</project>
